@@ -1,0 +1,84 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+
+# Sample data: This is a simplified example. In a real scenario, use a proper dataset.
+# Deficiencies as input vector (e.g., [vitA_def, vitC_def, iron_def, calcium_def, protein_def])
+# Output: Diet sheet as a vector of recommended food quantities or scores (e.g., [apple, spinach, milk, nuts, chicken])
+
+# Dummy dataset for demonstration (not real data; replace with actual nutrition data)
+def generate_sample_data(num_samples=100):
+    inputs = np.random.rand(num_samples, 5)  # 5 deficiencies
+    outputs = np.random.rand(num_samples, 5)  # 5 food recommendations
+    return inputs, outputs
+
+# Define the PyTorch model
+class DietRecommendationModel(nn.Module):
+    def __init__(self, input_size=5, hidden_size=64, output_size=5):
+        super(DietRecommendationModel, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.fc3 = nn.Linear(hidden_size, output_size)
+        self.relu = nn.ReLU()
+    
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.fc3(x)  # Output scores for diet items
+        return x
+
+# Function to train the model
+def train_model(model, inputs, outputs, epochs=100, lr=0.001):
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        predictions = model(inputs)
+        loss = criterion(predictions, outputs)
+        loss.backward()
+        optimizer.step()
+        
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
+
+# Function to generate diet sheet from model output
+def generate_diet_sheet(output, food_list):
+    diet_sheet = {}
+    for i, score in enumerate(output):
+        diet_sheet[food_list[i]] = f'Recommended amount score: {score:.2f}'
+    return diet_sheet
+
+# New: Function to test custom data
+def test_custom_data(model, custom_input, food_list):
+    model.eval()  # Set model to evaluation mode
+    with torch.no_grad():
+        input_tensor = torch.tensor(custom_input, dtype=torch.float32)
+        predicted = model(input_tensor).detach().numpy()[0]
+    diet_sheet = generate_diet_sheet(predicted, food_list)
+    return diet_sheet
+
+# Main execution
+if __name__ == "__main__":
+    # Sample data
+    inputs_np, outputs_np = generate_sample_data()
+    inputs = torch.tensor(inputs_np, dtype=torch.float32)
+    outputs = torch.tensor(outputs_np, dtype=torch.float32)
+    
+    # Initialize and train model
+    model = DietRecommendationModel()
+    train_model(model, inputs, outputs)
+    
+    # Sample food list (customize for Ayurvedic relevance, e.g., add turmeric, ghee, etc.)
+    foods = ['Apples (Vit C)', 'Spinach (Iron)', 'Milk (Calcium)', 'Nuts (Protein)', 'Eggs (Vit A)']
+    
+    # Test with your own custom data
+    # Example: Custom deficiency vector (adjust values as needed; 0 = no deficiency, 1 = high deficiency)
+    custom_deficiency = [[0.8, 0.2, 0.5, 0.9, 0.1]]  # E.g., high Vit A and Calcium deficiency
+    
+    diet_sheet = test_custom_data(model, custom_deficiency, foods)
+    
+    print("\nGenerated Diet Sheet from Custom Test Data:")
+    for item, rec in diet_sheet.items():
+        print(f"{item}: {rec}")
