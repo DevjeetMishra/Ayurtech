@@ -1,0 +1,90 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from pymongo import MongoClient
+import numpy as np
+
+# Define the AI model
+class AyurvedicRecommender(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(AyurvedicRecommender, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, output_size)  # Output: scores for each product
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+# Function to fetch products from MongoDB
+def fetch_products_from_db():
+    client = MongoClient('mongodb://localhost:27017/')  # Adjust if needed
+    db = client['ayurvedic_diet_db']
+    collection = db['nutrient_data']
+    products = list(collection.find())  # Fetch all products
+    client.close()
+    return products
+
+# Function to generate diet sheet based on recommendations
+def generate_diet_sheet(products, scores):
+    diet_sheet = []
+    for i, product in enumerate(products):
+        score = scores[i]
+        quantity = f"{int(score * 100)}g daily" if score > 0.5 else "Optional"
+        diet_sheet.append({
+            "product": product['product_name'],
+            "recommended_quantity": quantity,
+            "nutrients": product['nutrients'],
+            "ayurvedic_properties": product['ayurvedic_properties'],
+            "reason": f"Score: {score:.2f} (matches deficiencies)"
+        })
+    return diet_sheet
+
+# Main execution
+if __name__ == "__main__":
+    # Fetch products from database (assumes 3 sample products; scales to more)
+    products = fetch_products_from_db()
+    num_products = len(products)
+    if num_products == 0:
+        print("No products in database. Please insert data first.")
+        exit()
+
+    # Model parameters (input: 6 deficiencies, output: score per product)
+    input_size = 6  # e.g., calories, protein_g, fat_g, vitamin_c_mg, iron_mg, calcium_mg
+    hidden_size = 16
+    model = AyurvedicRecommender(input_size, hidden_size, num_products)
+
+    # Dummy training (replace with real data; here for demo)
+    # Training data: sample inputs (deficiencies) and outputs (product scores)
+    train_inputs = torch.tensor([[0.2, 0.3, 0.1, 0.8, 0.4, 0.5]], dtype=torch.float32)  # One sample
+    train_outputs = torch.tensor([[0.7, 0.4, 0.9]], dtype=torch.float32)  # Scores for 3 products
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    criterion = nn.MSELoss()
+    for epoch in range(10):  # Minimal epochs for demo
+        optimizer.zero_grad()
+        preds = model(train_inputs)
+        loss = criterion(preds, train_outputs)
+        loss.backward()
+        optimizer.step()
+        print(f"Epoch {epoch+1}: Loss = {loss.item():.4f}")
+
+    # Example patient deficiencies input
+    patient_deficiencies = torch.tensor([[0.6, 0.1, 0.3, 0.7, 0.2, 0.4]], dtype=torch.float32)  # Customize this
+
+    # Get recommendation scores
+    model.eval()
+    with torch.no_grad():
+        scores = model(patient_deficiencies).squeeze().numpy()
+
+    # Normalize scores (0-1)
+    scores = (scores - scores.min()) / (scores.max() - scores.min())
+
+    # Generate and print diet sheet
+    diet_sheet = generate_diet_sheet(products, scores)
+    print("\nGenerated Diet Sheet:")
+    for item in diet_sheet:
+        print(f"- {item['product']}: {item['recommended_quantity']}")
+        print(f"  Nutrients: {item['nutrients']}")
+        print(f"  Ayurvedic Properties: {item['ayurvedic_properties']}")
+        print(f"  Reason: {item['reason']}\n")
